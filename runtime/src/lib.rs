@@ -269,6 +269,8 @@ impl pallet_template::Trait for Runtime {
 impl pallet_nft::Trait for Runtime {
 	type Event = Event;
 	type NftId = u128;
+	type OrderId = u128;
+	type Currency = Balances;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
