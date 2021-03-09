@@ -1,23 +1,13 @@
-use crate::{Error, mock::*};
-use frame_support::{assert_ok, assert_noop};
+use crate::mock::*;
+use super::*;
+use frame_support::{assert_ok};
 
 #[test]
-fn it_works_for_default_value() {
+fn test_ntf_create() {
 	new_test_ext().execute_with(|| {
-		// Dispatch a signed extrinsic.
-		assert_ok!(NftModule::do_something(Origin::signed(1), 42));
-		// Read pallet storage and assert an expected result.
-		assert_eq!(NftModule::something(), Some(42));
-	});
-}
-
-#[test]
-fn correct_error_for_none_value() {
-	new_test_ext().execute_with(|| {
-		// Ensure the expected error is thrown when no value is present.
-		assert_noop!(
-			NftModule::cause_error(Origin::signed(1)),
-			Error::<Test>::NoneValue
-		);
+		run_to_block(10);
+		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
+		let lock_event = TestEvent::nft_event(RawEvent::NftCreated(1, 0));
+		assert!(System::events().iter().any(|a| a.event == lock_event));
 	});
 }

@@ -5,7 +5,7 @@ use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error, d
 use frame_system::ensure_signed;
 use sp_runtime::{
 	DispatchResult, RuntimeDebug,
-	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Bounded, One, CheckedAdd, Zero},
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Bounded, One, CheckedAdd},
 };
 use sp_std::prelude::*;
 
