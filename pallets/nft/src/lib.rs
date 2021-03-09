@@ -74,6 +74,7 @@ decl_event!(
 		OrderBuy(AccountId, Bid),
 
 		OrderComplete(AccountId, OrderId),
+		OrderCancel(AccountId, OrderId),
 	}
 );
 
@@ -86,6 +87,8 @@ decl_error! {
 		OrderNotExist,
 		OrderPriceIllegal,
 		OrderPriceTooSmall,
+		IsTimeToSettlement,
+		IsNotTimeToSettlement,
 		OrderIdOverflow,
 		OrderIdNotExist,
 	}
@@ -194,6 +197,9 @@ decl_module! {
 			// 检查订单是否存在
 			let order: OrderOf<T> = Orders::<T>::get(order_id).ok_or(Error::<T>::OrderNotExist)?;
 
+			// 检查是否到了结算时间
+			ensure!(!Self::is_time_to_settlement_false(&order), Error::<T>::IsTimeToSettlement);
+
 			// 检查价格是否合法
 			ensure!(order.start_price <= price, Error::<T>::OrderPriceTooSmall);
 
@@ -206,23 +212,15 @@ decl_module! {
 			// 检查是否到了最大价格
 			if price >= order.end_price {
 				// 达到最大价格，拍卖成功
-				let owner = NftAccount::<T>::get(&order.nft_id);
-				// 进行转账
-				T::Currency::transfer(&who, &owner, order.end_price, ExistenceRequirement::KeepAlive)?;
-				// 移除订单索引
-				Orders::<T>::remove(order_id);
-				NftOrder::<T>::remove(order.nft_id);
-				// 更新nft账户索引
-				NftAccount::<T>::insert(order.nft_id, who.clone());
-				// 移除之前的bid
-				Self::clean_order_bid(order_id)?;
-				Self::deposit_event(RawEvent::OrderComplete(who, order_id));
+				Self::order_complete(&order, &who, order.end_price, &who)?;
+				// 移除上个bid
+				Self::clean_order_bid(order_id);
 			} else {
 				// 参与竞价
 				// 锁定价格
 				T::Currency::reserve(&who, price)?;
 				// 移除之前的bid
-				Self::clean_order_bid(order_id)?;
+				Self::clean_order_bid(order_id);
 				// 创建新的bid
 				let bid = Bid {
 					order_id,
@@ -234,16 +232,71 @@ decl_module! {
 			}
 			Ok(())
 		}
+
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
+		pub fn order_settlement(origin, order_id: T::OrderId) -> dispatch::DispatchResult {
+			let who = ensure_signed(origin)?;
+			// 检查订单是否存在
+			let order: OrderOf<T> = Orders::<T>::get(order_id).ok_or(Error::<T>::OrderNotExist)?;
+			// 检查是否可以进行结算订单
+			ensure!(Self::is_time_to_settlement_true(&order), Error::<T>::IsNotTimeToSettlement);
+
+			// 获取最后那个竞价
+			let bidopt: Option<BidOf<T>> = Bids::<T>::get(order_id);
+			if let Some(bid) = bidopt {
+				// 移除之前的bid
+				Self::clean_order_bid(order_id);
+				Self::order_complete(&order, &bid.owner, bid.price, &who)?;
+				Self::deposit_event(RawEvent::OrderComplete(bid.owner, order_id));
+			} else {
+				// 移除订单索引
+				Orders::<T>::remove(order_id);
+				NftOrder::<T>::remove(order.nft_id);
+				Self::deposit_event(RawEvent::OrderCancel(order.owner, order_id));
+			}
+			Ok(())
+		}
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn clean_order_bid(order_id: T::OrderId) -> dispatch::DispatchResult {
+
+	// 清理bid的reserve，和索引
+	pub fn clean_order_bid(order_id: T::OrderId) {
 		let bid_opt: Option<BidOf<T>> = Bids::<T>::get(order_id);
 		if let Some(bid) = bid_opt {
 			// 解锁之前的锁定的钱
 			T::Currency::unreserve(&bid.owner, bid.price);
+			Bids::<T>::remove(order_id);
 		}
+	}
+
+	// todo: 验证订单是否到期
+	// 拆分两个方法用于测试
+	fn is_time_to_settlement_false(_order: &OrderOf<T>) -> bool {
+		false
+	}
+	fn is_time_to_settlement_true(_order: &OrderOf<T>) -> bool {
+		true
+	}
+
+
+	// todo: 进行订单结算
+	fn order_complete(
+		order: &OrderOf<T>,
+		bid: &T::AccountId, // 购买者
+		price: BalanceOf<T>, // 最终购买价格
+		_settlement: &T::AccountId // 触发完成人
+	) -> dispatch::DispatchResult {
+		T::Currency::transfer(
+			&bid, &order.owner, price, ExistenceRequirement::KeepAlive
+		)?;
+		// 移除订单索引
+		Orders::<T>::remove(order.order_id);
+		NftOrder::<T>::remove(order.nft_id);
+		// 更新nft账户索引
+		NftAccount::<T>::insert(order.nft_id, bid.clone());
+		Self::deposit_event(RawEvent::OrderComplete(bid.clone(), order.order_id));
 		Ok(())
 	}
 }
