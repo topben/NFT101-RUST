@@ -40,10 +40,19 @@ pub struct Bid<OrderId, AccountId, Balance> {
 	pub owner: AccountId,
 }
 
+#[derive(Encode, Decode, Clone, RuntimeDebug, Eq, PartialEq)]
+pub struct Vote<OrderId, AccountId, Balance> {
+	pub order_id: OrderId,
+	#[codec(compact)]
+	pub amount: Balance,
+	pub owner: AccountId,
+}
+
 type Nft = Vec<u8>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type OrderOf<T> = Order<<T as Trait>::OrderId, <T as Trait>::NftId, <T as frame_system::Trait>::AccountId, BalanceOf<T>>;
 type BidOf<T> = Bid<<T as Trait>::OrderId, <T as frame_system::Trait>::AccountId, BalanceOf<T>>;
+type VoteOf<T> = Vote<<T as Trait>::OrderId, <T as frame_system::Trait>::AccountId, BalanceOf<T>>;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as NftModule {
@@ -55,6 +64,7 @@ decl_storage! {
 		pub Orders: map hasher(twox_64_concat) T::OrderId => Option<OrderOf<T>>;
 		pub Bids: map hasher(twox_64_concat) T::OrderId => Option<BidOf<T>>;
 		pub NftOrder: map hasher(twox_64_concat) T::NftId => Option<T::OrderId>;
+		pub Votes: map hasher(twox_64_concat) T::OrderId => Vec<VoteOf<T>>; // 存储结构可以优化
 	}
 }
 
@@ -184,6 +194,8 @@ decl_module! {
 				// 插入订单索引
 				Orders::<T>::insert(order_id, order.clone());
 				NftOrder::<T>::insert(nft_id, order_id);
+				let votes: Vec<VoteOf<T>> = Vec::new();
+				Votes::<T>::insert(order_id, votes);
 				Self::deposit_event(RawEvent::OrderSell(who, order));
 				Ok(())
 			})?;
@@ -252,8 +264,37 @@ decl_module! {
 				// 移除订单索引
 				Orders::<T>::remove(order_id);
 				NftOrder::<T>::remove(order.nft_id);
+				let votes: Vec<VoteOf<T>> = Votes::<T>::get(order_id);
+				for vote in votes {
+					T::Currency::unreserve(&vote.owner, vote.amount);
+				}
+				Votes::<T>::remove(order_id);
 				Self::deposit_event(RawEvent::OrderCancel(order.owner, order_id));
 			}
+			Ok(())
+		}
+
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
+		pub fn vote_order(origin, order_id: T::OrderId, amount: BalanceOf<T>) -> dispatch::DispatchResult {
+			let who = ensure_signed(origin)?;
+			// 检查订单是否存在
+			let order: OrderOf<T> = Orders::<T>::get(order_id).ok_or(Error::<T>::OrderNotExist)?;
+
+			// 检查是否到了结算时间
+			ensure!(!Self::is_time_to_settlement_false(&order), Error::<T>::IsTimeToSettlement);
+
+			// 质押
+			T::Currency::reserve(&who, amount)?;
+			// 插入投票信息
+			Votes::<T>::try_mutate(order_id, |votes| -> DispatchResult {
+				let vote = Vote {
+					order_id,
+					amount,
+					owner: who.clone()
+				};
+				votes.push(vote);
+				Ok(())
+			})?;
 			Ok(())
 		}
 	}
@@ -294,6 +335,11 @@ impl<T: Trait> Module<T> {
 		// 移除订单索引
 		Orders::<T>::remove(order.order_id);
 		NftOrder::<T>::remove(order.nft_id);
+		let votes: Vec<VoteOf<T>> = Votes::<T>::get(order.order_id);
+		for vote in votes {
+			T::Currency::unreserve(&vote.owner, vote.amount);
+		}
+		Votes::<T>::remove(order.order_id);
 		// 更新nft账户索引
 		NftAccount::<T>::insert(order.nft_id, bid.clone());
 		Self::deposit_event(RawEvent::OrderComplete(bid.clone(), order.order_id));
