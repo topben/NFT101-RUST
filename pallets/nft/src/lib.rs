@@ -21,6 +21,8 @@ pub trait Trait: frame_system::Trait {
 	type OrderId: Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + Bounded;
 	type Currency: ReservableCurrency<Self::AccountId>;
 }
+const MAX_KEEP_BLOCK_NUM: u32 = 28800; // 60 * 60 * 24 * 2 / 6 两天
+const MIN_KEEP_BLOCK_NUM: u32 = 600; // 60 * 60 / 6 一小时
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, Eq, PartialEq)]
 pub struct Order<OrderId, NftId, AccountId, Balance> {
@@ -29,6 +31,7 @@ pub struct Order<OrderId, NftId, AccountId, Balance> {
 	pub start_price: Balance,
 	pub end_price: Balance,
 	pub nft_id: NftId,
+	pub keep_block_num: u32,
 	pub owner: AccountId,
 }
 
@@ -97,6 +100,8 @@ decl_error! {
 		OrderNotExist,
 		OrderPriceIllegal,
 		OrderPriceTooSmall,
+		KeepBlockNumTooBig,
+		KeepBlockNumTooSmall,
 		IsTimeToSettlement,
 		IsNotTimeToSettlement,
 		OrderIdOverflow,
@@ -165,8 +170,12 @@ decl_module! {
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn order_sell(origin, nft_id: T::NftId, start_price: BalanceOf<T>, end_price: BalanceOf<T>) -> dispatch::DispatchResult {
+		pub fn order_sell(origin, nft_id: T::NftId, start_price: BalanceOf<T>, end_price: BalanceOf<T>, keep_block_num: u32) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
+			// 检查keep_block_num是否合法
+			ensure!(keep_block_num <= MAX_KEEP_BLOCK_NUM, Error::<T>::KeepBlockNumTooBig);
+			ensure!(keep_block_num >= MIN_KEEP_BLOCK_NUM, Error::<T>::KeepBlockNumTooSmall);
+
 			// 检查nft是否存在
 			ensure!(Nfts::<T>::contains_key(&nft_id), Error::<T>::NftIdNotExist);
 
@@ -188,6 +197,7 @@ decl_module! {
 					start_price,
 					end_price,
 					nft_id,
+					keep_block_num,
 					owner: who.clone(),
 				};
 				*id = id.checked_add(&One::one()).ok_or(Error::<T>::OrderIdOverflow)?;
@@ -313,7 +323,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	// todo: 验证订单是否到期
-	// 拆分两个方法用于测试
+	// 需要在Order里面增加创建订单时的区块，根据order中的keep_block_number设置检查是否到期
+	// 此处拆分两个方法用于测试，完成代码后只需要保存一个 fn is_time_to_settlement(order: &OrderOf<T>) -> bool 即可
 	fn is_time_to_settlement_false(_order: &OrderOf<T>) -> bool {
 		false
 	}
