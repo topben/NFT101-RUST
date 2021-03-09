@@ -1,0 +1,24 @@
+{
+  "Address": "MultiAddress",
+  "LookupSource": "MultiAddress",
+  "Nft": "String",
+  "NftId": "u128",
+  "OrderId": "u128",
+  "OrderOf": {
+    "order_id": "u128",
+    "start_price": "Balance",
+    "end_price": "Balance",
+    "nft_id": "u128",
+    "owner": "Hash"
+  },
+  "BidOf": {
+    "order_id": "u128",
+    "price": "Balance",
+    "owner": "Hash"
+  },
+  "VoteOf": {
+    "order_id": "u128",
+    "amount": "Balance",
+    "owner": "Hash"
+  }
+}
