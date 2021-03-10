@@ -4,9 +4,10 @@ use codec::{Encode, Decode};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error, dispatch, traits::{Get, Currency, ReservableCurrency, ExistenceRequirement}, Parameter};
 use frame_system::ensure_signed;
 use sp_runtime::{
-	DispatchResult, RuntimeDebug,
-	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Bounded, One, CheckedAdd},
+	DispatchResult, DispatchError, RuntimeDebug,
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Bounded, One, CheckedAdd, CheckedSub},
 };
+use sp_std::result::Result;
 use sp_std::prelude::*;
 
 #[cfg(test)]
@@ -17,21 +18,22 @@ mod tests;
 
 pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type MinKeepBlockNumber: Get<Self::BlockNumber>;
+	type MaxKeepBlockNumber: Get<Self::BlockNumber>;
 	type NftId: Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + Bounded;
 	type OrderId: Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + Bounded;
 	type Currency: ReservableCurrency<Self::AccountId>;
 }
-const MAX_KEEP_BLOCK_NUM: u32 = 28800; // 60 * 60 * 24 * 2 / 6 两天
-const MIN_KEEP_BLOCK_NUM: u32 = 600; // 60 * 60 / 6 一小时
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, Eq, PartialEq)]
-pub struct Order<OrderId, NftId, AccountId, Balance> {
+pub struct Order<OrderId, NftId, AccountId, Balance, BlockNumber> {
 	pub order_id: OrderId,
 	#[codec(compact)]
 	pub start_price: Balance,
 	pub end_price: Balance,
 	pub nft_id: NftId,
-	pub keep_block_num: u32,
+	pub create_block: BlockNumber,
+	pub keep_block_num: BlockNumber,
 	pub owner: AccountId,
 }
 
@@ -53,7 +55,7 @@ pub struct Vote<OrderId, AccountId, Balance> {
 
 type Nft = Vec<u8>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type OrderOf<T> = Order<<T as Trait>::OrderId, <T as Trait>::NftId, <T as frame_system::Trait>::AccountId, BalanceOf<T>>;
+type OrderOf<T> = Order<<T as Trait>::OrderId, <T as Trait>::NftId, <T as frame_system::Trait>::AccountId, BalanceOf<T>, <T as frame_system::Trait>::BlockNumber>;
 type BidOf<T> = Bid<<T as Trait>::OrderId, <T as frame_system::Trait>::AccountId, BalanceOf<T>>;
 type VoteOf<T> = Vote<<T as Trait>::OrderId, <T as frame_system::Trait>::AccountId, BalanceOf<T>>;
 
@@ -106,6 +108,7 @@ decl_error! {
 		IsNotTimeToSettlement,
 		OrderIdOverflow,
 		OrderIdNotExist,
+		BlockNumberOverflow,
 	}
 }
 
@@ -114,6 +117,9 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+
+		const MinKeepBlockNumber: T::BlockNumber = T::MinKeepBlockNumber::get();
+		const MaxKeepBlockNumber: T::BlockNumber = T::MaxKeepBlockNumber::get();
 
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn create(origin, url: Vec<u8>) -> dispatch::DispatchResult {
@@ -170,11 +176,11 @@ decl_module! {
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn order_sell(origin, nft_id: T::NftId, start_price: BalanceOf<T>, end_price: BalanceOf<T>, keep_block_num: u32) -> dispatch::DispatchResult {
+		pub fn order_sell(origin, nft_id: T::NftId, start_price: BalanceOf<T>, end_price: BalanceOf<T>, keep_block_num: T::BlockNumber) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 			// 检查keep_block_num是否合法
-			ensure!(keep_block_num <= MAX_KEEP_BLOCK_NUM, Error::<T>::KeepBlockNumTooBig);
-			ensure!(keep_block_num >= MIN_KEEP_BLOCK_NUM, Error::<T>::KeepBlockNumTooSmall);
+			ensure!(keep_block_num <= T::MaxKeepBlockNumber::get(), Error::<T>::KeepBlockNumTooBig);
+			ensure!(keep_block_num >= T::MinKeepBlockNumber::get(), Error::<T>::KeepBlockNumTooSmall);
 
 			// 检查nft是否存在
 			ensure!(Nfts::<T>::contains_key(&nft_id), Error::<T>::NftIdNotExist);
@@ -197,6 +203,7 @@ decl_module! {
 					start_price,
 					end_price,
 					nft_id,
+					create_block: frame_system::Module::<T>::block_number(),
 					keep_block_num,
 					owner: who.clone(),
 				};
@@ -220,7 +227,7 @@ decl_module! {
 			let order: OrderOf<T> = Orders::<T>::get(order_id).ok_or(Error::<T>::OrderNotExist)?;
 
 			// 检查是否到了结算时间
-			ensure!(!Self::is_time_to_settlement_false(&order), Error::<T>::IsTimeToSettlement);
+			ensure!(!Self::is_time_to_settlement(&order)?, Error::<T>::IsTimeToSettlement);
 
 			// 检查价格是否合法
 			ensure!(order.start_price <= price, Error::<T>::OrderPriceTooSmall);
@@ -261,7 +268,7 @@ decl_module! {
 			// 检查订单是否存在
 			let order: OrderOf<T> = Orders::<T>::get(order_id).ok_or(Error::<T>::OrderNotExist)?;
 			// 检查是否可以进行结算订单
-			ensure!(Self::is_time_to_settlement_true(&order), Error::<T>::IsNotTimeToSettlement);
+			ensure!(Self::is_time_to_settlement(&order)?, Error::<T>::IsNotTimeToSettlement);
 
 			// 获取最后那个竞价
 			let bidopt: Option<BidOf<T>> = Bids::<T>::get(order_id);
@@ -291,7 +298,7 @@ decl_module! {
 			let order: OrderOf<T> = Orders::<T>::get(order_id).ok_or(Error::<T>::OrderNotExist)?;
 
 			// 检查是否到了结算时间
-			ensure!(!Self::is_time_to_settlement_false(&order), Error::<T>::IsTimeToSettlement);
+			ensure!(!Self::is_time_to_settlement(&order)?, Error::<T>::IsTimeToSettlement);
 
 			// 质押
 			T::Currency::reserve(&who, amount)?;
@@ -322,14 +329,12 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	// todo: 验证订单是否到期
 	// 需要在Order里面增加创建订单时的区块，根据order中的keep_block_number设置检查是否到期
-	// 此处拆分两个方法用于测试，完成代码后只需要保存一个 fn is_time_to_settlement(order: &OrderOf<T>) -> bool 即可
-	fn is_time_to_settlement_false(_order: &OrderOf<T>) -> bool {
-		false
-	}
-	fn is_time_to_settlement_true(_order: &OrderOf<T>) -> bool {
-		true
+	// 到期则返回true，否则返回false
+	fn is_time_to_settlement(order: &OrderOf<T>) -> Result<bool, DispatchError> {
+		let now = frame_system::Module::<T>::block_number();
+		let sub_block = now.checked_sub(&order.create_block).ok_or(Error::<T>::BlockNumberOverflow)?;
+		Ok(sub_block > order.keep_block_num)
 	}
 
 

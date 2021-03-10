@@ -38,8 +38,6 @@ pub use frame_support::{
 	},
 };
 
-/// Import the template pallet.
-pub use pallet_template;
 pub use pallet_nft;
 
 /// An index to a block.
@@ -93,8 +91,8 @@ pub mod opaque {
 }
 
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("node-template"),
-	impl_name: create_runtime_str!("node-template"),
+	spec_name: create_runtime_str!("nft-swap"),
+	impl_name: create_runtime_str!("nft-swap"),
 	authoring_version: 1,
 	spec_version: 100,
 	impl_version: 1,
@@ -262,12 +260,14 @@ impl pallet_sudo::Trait for Runtime {
 	type Call = Call;
 }
 
-/// Configure the template pallet in pallets/template.
-impl pallet_template::Trait for Runtime {
-	type Event = Event;
+parameter_types! {
+	pub const MinKeepBlockNumber: BlockNumber = 1 * HOURS;
+	pub const MaxKeepBlockNumber: BlockNumber = 2 * DAYS;
 }
 impl pallet_nft::Trait for Runtime {
 	type Event = Event;
+	type MinKeepBlockNumber = MinKeepBlockNumber;
+	type MaxKeepBlockNumber = MaxKeepBlockNumber;
 	type NftId = u128;
 	type OrderId = u128;
 	type Currency = Balances;
@@ -288,8 +288,6 @@ construct_runtime!(
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
-		// Include the custom logic from the template pallet in the runtime.
-		TemplateModule: pallet_template::{Module, Call, Storage, Event<T>},
 		NftModule: pallet_nft::{Module, Call, Storage, Event<T>},
 	}
 );

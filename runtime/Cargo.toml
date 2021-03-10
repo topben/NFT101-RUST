@@ -1,10 +1,8 @@
 [package]
-authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
+authors = ['nft-swap']
 edition = '2018'
-homepage = 'https://substrate.dev'
 license = 'Unlicense'
-name = 'node-template-runtime'
-repository = 'https://github.com/substrate-developer-hub/substrate-node-template/'
+name = 'nft-swap-runtime'
 version = '2.0.1'
 
 [package.metadata.docs.rs]
@@ -25,7 +23,6 @@ hex-literal = { optional = true, version = '0.3.1' }
 serde = { features = ['derive'], optional = true, version = '1.0.119' }
 
 # local dependencies
-pallet-template = { path = '../pallets/template', default-features = false, version = '2.0.1' }
 pallet-nft = { path = '../pallets/nft', default-features = false, version = '2.0.1' }
 
 # Substrate dependencies
@@ -79,7 +76,6 @@ std = [
     'pallet-grandpa/std',
     'pallet-randomness-collective-flip/std',
     'pallet-sudo/std',
-    'pallet-template/std',
     'pallet-nft/std',
     'pallet-timestamp/std',
     'pallet-transaction-payment/std',
