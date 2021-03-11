@@ -109,6 +109,10 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 
+pub const MILLICENTS: Balance = 1_000_000_000;
+pub const CENTS: Balance = 1_000 * MILLICENTS; // assume this is worth about a cent.
+pub const DOLLARS: Balance = 100 * CENTS;
+
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
 pub fn native_version() -> NativeVersion {
@@ -263,11 +267,15 @@ impl pallet_sudo::Trait for Runtime {
 parameter_types! {
 	pub const MinKeepBlockNumber: BlockNumber = 1 * HOURS;
 	pub const MaxKeepBlockNumber: BlockNumber = 2 * DAYS;
+	pub const MinimumPrice: Balance = 1 * DOLLARS;
+	pub const MinimumVotingLock: Balance = 1 * CENTS;
 }
 impl pallet_nft::Trait for Runtime {
 	type Event = Event;
 	type MinKeepBlockNumber = MinKeepBlockNumber;
 	type MaxKeepBlockNumber = MaxKeepBlockNumber;
+	type MinimumPrice = MinimumPrice;
+	type MinimumVotingLock = MinimumVotingLock;
 	type NftId = u128;
 	type OrderId = u128;
 	type Currency = Balances;

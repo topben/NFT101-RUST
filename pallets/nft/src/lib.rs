@@ -20,6 +20,8 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	type MinKeepBlockNumber: Get<Self::BlockNumber>;
 	type MaxKeepBlockNumber: Get<Self::BlockNumber>;
+	type MinimumPrice: Get<BalanceOf<Self>>;
+	type MinimumVotingLock: Get<BalanceOf<Self>>;
 	type NftId: Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + Bounded;
 	type OrderId: Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + Bounded;
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -109,6 +111,9 @@ decl_error! {
 		OrderIdOverflow,
 		OrderIdNotExist,
 		BlockNumberOverflow,
+		PriceTooLow,
+		StartPriceTooLow,
+		VoteAmountTooLow,
 	}
 }
 
@@ -120,6 +125,8 @@ decl_module! {
 
 		const MinKeepBlockNumber: T::BlockNumber = T::MinKeepBlockNumber::get();
 		const MaxKeepBlockNumber: T::BlockNumber = T::MaxKeepBlockNumber::get();
+		const MinimumPrice: BalanceOf<T> = T::MinimumPrice::get();
+		const MinimumVotingLock: BalanceOf<T> = T::MinimumVotingLock::get();
 
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn create(origin, url: Vec<u8>) -> dispatch::DispatchResult {
@@ -192,6 +199,9 @@ decl_module! {
 			// 检查nft是否处于订单中
 			ensure!(!NftOrder::<T>::contains_key(&nft_id), Error::<T>::NftOrderExist);
 
+			// 检查最小价格
+			ensure!(T::MinimumPrice::get() >= start_price, Error::<T>::StartPriceTooLow);
+
 			// 检查价格是否合法
 			ensure!(start_price <= end_price, Error::<T>::OrderPriceIllegal);
 
@@ -228,6 +238,9 @@ decl_module! {
 
 			// 检查是否到了结算时间
 			ensure!(!Self::is_time_to_settlement(&order)?, Error::<T>::IsTimeToSettlement);
+
+			// 检查最小价格
+			ensure!(T::MinimumPrice::get() >= price, Error::<T>::PriceTooLow);
 
 			// 检查价格是否合法
 			ensure!(order.start_price <= price, Error::<T>::OrderPriceTooSmall);
@@ -299,6 +312,9 @@ decl_module! {
 
 			// 检查是否到了结算时间
 			ensure!(!Self::is_time_to_settlement(&order)?, Error::<T>::IsTimeToSettlement);
+
+			// 检查最小质押
+			ensure!(T::MinimumVotingLock::get() >= amount, Error::<T>::VoteAmountTooLow);
 
 			// 质押
 			T::Currency::reserve(&who, amount)?;
