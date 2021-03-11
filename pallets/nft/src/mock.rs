@@ -31,8 +31,9 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 
 	pub const ExistentialDeposit: u64 = 1;
+	pub const MinKeepBlockNumber: u64 = 100;
+	pub const MaxKeepBlockNumber: u64 = 600;
 }
-
 impl system::Trait for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
@@ -73,6 +74,8 @@ type Balances = pallet_balances::Module<Test>;
 
 impl Trait for Test {
 	type Event = TestEvent;
+	type MinKeepBlockNumber = MinKeepBlockNumber;
+	type MaxKeepBlockNumber = MaxKeepBlockNumber;
 	type NftId = u32;
 	type OrderId = u32;
 	type Currency = Balances;
