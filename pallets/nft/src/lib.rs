@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Encode, Decode};
-use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error, dispatch, traits::{Get, Currency, ReservableCurrency, ExistenceRequirement}, Parameter};
+use frame_support::{debug, ensure, decl_module, decl_storage, decl_event, decl_error, dispatch, traits::{Get, Currency, ReservableCurrency, ExistenceRequirement}, Parameter};
 use frame_system::ensure_signed;
 use sp_runtime::{
 	DispatchResult, DispatchError, RuntimeDebug,
@@ -9,6 +9,8 @@ use sp_runtime::{
 };
 use sp_std::result::Result;
 use sp_std::prelude::*;
+use sp_runtime::SaturatedConversion;
+use substrate_fixed::types::U64F64;
 
 #[cfg(test)]
 mod mock;
@@ -22,6 +24,9 @@ pub trait Trait: frame_system::Trait {
 	type MaxKeepBlockNumber: Get<Self::BlockNumber>;
 	type MinimumPrice: Get<BalanceOf<Self>>;
 	type MinimumVotingLock: Get<BalanceOf<Self>>;
+	type FixRate: Get<f64>;
+	type ProfitRate: Get<f64>;
+	type DayBlockNum: Get<Self::BlockNumber>;
 	type NftId: Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + Bounded;
 	type OrderId: Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + Bounded;
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -48,10 +53,11 @@ pub struct Bid<OrderId, AccountId, Balance> {
 }
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, Eq, PartialEq)]
-pub struct Vote<OrderId, AccountId, Balance> {
+pub struct Vote<OrderId, AccountId, Balance, BlockNumber> {
 	pub order_id: OrderId,
 	#[codec(compact)]
 	pub amount: Balance,
+	pub keep_block_num: BlockNumber,
 	pub owner: AccountId,
 }
 
@@ -59,7 +65,7 @@ type Nft = Vec<u8>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type OrderOf<T> = Order<<T as Trait>::OrderId, <T as Trait>::NftId, <T as frame_system::Trait>::AccountId, BalanceOf<T>, <T as frame_system::Trait>::BlockNumber>;
 type BidOf<T> = Bid<<T as Trait>::OrderId, <T as frame_system::Trait>::AccountId, BalanceOf<T>>;
-type VoteOf<T> = Vote<<T as Trait>::OrderId, <T as frame_system::Trait>::AccountId, BalanceOf<T>>;
+type VoteOf<T> = Vote<<T as Trait>::OrderId, <T as frame_system::Trait>::AccountId, BalanceOf<T>, <T as frame_system::Trait>::BlockNumber>;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as NftModule {
@@ -316,6 +322,11 @@ decl_module! {
 			// 检查最小质押
 			ensure!(T::MinimumVotingLock::get() >= amount, Error::<T>::VoteAmountTooLow);
 
+			let now = frame_system::Module::<T>::block_number();
+			let keep_block_num = order.create_block
+				.checked_add(&order.keep_block_num).ok_or(Error::<T>::BlockNumberOverflow)?
+				.checked_sub(&now).ok_or(Error::<T>::BlockNumberOverflow)?;
+
 			// 质押
 			T::Currency::reserve(&who, amount)?;
 			// 插入投票信息
@@ -323,6 +334,7 @@ decl_module! {
 				let vote = Vote {
 					order_id,
 					amount,
+					keep_block_num,
 					owner: who.clone()
 				};
 				votes.push(vote);
@@ -368,6 +380,7 @@ impl<T: Trait> Module<T> {
 		Orders::<T>::remove(order.order_id);
 		NftOrder::<T>::remove(order.nft_id);
 		let votes: Vec<VoteOf<T>> = Votes::<T>::get(order.order_id);
+		Self::algorithm(&order, price, votes.clone());
 		for vote in votes {
 			T::Currency::unreserve(&vote.owner, vote.amount);
 		}
@@ -377,4 +390,68 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::OrderComplete(bid.clone(), order.order_id));
 		Ok(())
 	}
+
+	pub fn algorithm(
+		order: &OrderOf<T>, // 最大拍卖区块数
+		bid_price: BalanceOf<T>, // 购买价格
+		inputs: Vec<VoteOf<T>> //质押列表
+	) {
+		let fix_rate: U64F64 = U64F64::from_num(T::FixRate::get());
+		let profit_rate: U64F64 = U64F64::from_num(T::ProfitRate::get());
+		let day_block_num: u128 = T::DayBlockNum::get().saturated_into();
+		let day_block_num: U64F64 = U64F64::from_num(day_block_num);
+		let block_num: u128 = order.keep_block_num.saturated_into();
+		let block_num: U64F64 = U64F64::from_num(block_num);
+		let bid_price: u128 = bid_price.saturated_into();
+		let bid_price: U64F64 = U64F64::from_num(bid_price);
+
+		let day: U64F64 = block_num / day_block_num;
+		let stock: U64F64 = bid_price * profit_rate / day * U64F64::from_num(365); // 初始股权数
+
+		debug::warn!(
+			"=>当前价格为: {}, 分成比例为: {}%, 拍卖时长: {}day, 初始股权数: {}, 固定年化: {}%",
+			bid_price,
+			profit_rate,
+			day,
+			stock,
+			fix_rate
+		);
+
+		let mut is_fixed: bool = false; // 是否开启固定利率
+		let mut total: U64F64 = U64F64::from_num(0.0); // 总质押数量
+		let mut weight_rate: U64F64 = U64F64::from_num(0.0); // 汇率
+		let mut tt: U64F64 = U64F64::from_num(0.0);
+		for vote in inputs {
+			let amount: u128 = vote.amount.saturated_into();
+			let amount: U64F64 = U64F64::from_num(amount);
+			let keep_block_num: u128 = vote.keep_block_num.saturated_into();
+			let keep_block_num: U64F64 = U64F64::from_num(keep_block_num);
+			let vote_day: U64F64 = keep_block_num / day_block_num;
+
+			let pre_weight: U64F64 = amount * vote_day / day; // 质押权重
+			total += pre_weight;
+
+			if !is_fixed {
+				weight_rate = stock / (stock + total); // 随着质押数量的增加,逐渐变小
+			}
+			let t: U64F64 = pre_weight * weight_rate;
+			tt += t;
+			let year_rate: U64F64 = t / tt * stock / pre_weight; // 年化收益率
+			if year_rate < fix_rate {
+				is_fixed = true;
+			}
+
+			debug::warn!(
+				"质押数量: {}, 质押时长: {}day, 当前汇率: {}, 当前年收益率为: {}, 此次获得的凭证为: {}/{}",
+				amount,
+				vote_day,
+				weight_rate,
+				year_rate,
+				t,
+				tt
+			)
+		}
+	}
+
+
 }
