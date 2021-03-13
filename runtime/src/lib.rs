@@ -266,8 +266,8 @@ impl pallet_sudo::Trait for Runtime {
 parameter_types! {
 	pub const MinKeepBlockNumber: BlockNumber = 1 * HOURS;
 	pub const MaxKeepBlockNumber: BlockNumber = 2 * DAYS;
-	pub const MinimumPrice: Balance = 1;
-	pub const MinimumVotingLock: Balance = 1;
+	pub const MinimumPrice: Balance = 1 * DOLLARS;
+	pub const MinimumVotingLock: Balance = 1 * CENTS;
 	pub const FixRate: f64 = 0.2;
 	pub const ProfitRate: f64 = 0.2;
 	pub const DayBlockNum: BlockNumber = DAYS;

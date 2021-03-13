@@ -36,6 +36,9 @@ parameter_types! {
 	pub const MaxKeepBlockNumber: u64 = 600;
 	pub const MinimumPrice: u64 = 0;
 	pub const MinimumVotingLock: u64 = 0;
+	pub const FixRate: f64 = 0.2;
+	pub const ProfitRate: f64 = 0.2;
+	pub const DayBlockNum: u64 = 600;
 }
 impl system::Trait for Test {
 	type BaseCallFilter = ();
@@ -81,6 +84,9 @@ impl Trait for Test {
 	type MaxKeepBlockNumber = MaxKeepBlockNumber;
 	type MinimumPrice = MinimumPrice;
 	type MinimumVotingLock = MinimumVotingLock;
+	type FixRate = ();
+	type ProfitRate = ();
+	type DayBlockNum = ();
 	type NftId = u32;
 	type OrderId = u32;
 	type Currency = Balances;

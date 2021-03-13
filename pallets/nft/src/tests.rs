@@ -127,17 +127,3 @@ fn test_order_buy_success() {
 		assert_eq!(NftAccount::<Test>::get(&0), 2);
 	});
 }
-
-use substrate_fixed::types::U64F64;
-use substrate_fixed::FixedU128;
-
-
-#[test]
-fn test_float() {
-	assert_eq!(U64F64::from_num(1.0) / U64F64::from_num(2), U64F64::from_num(0.5));
-	assert_ne!(U64F64::from_num(1.0) / U64F64::from_num(3), U64F64::from_num(0.3));
-	println!("{}", U64F64::from_num(1.0) / U64F64::from_num(3));
-	let d: U64F64 = U64F64::from_num(1.0);
-	let u = d.ceil().to_num::<u128>();
-	println!("{}", u);
-}

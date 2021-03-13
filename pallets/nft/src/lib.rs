@@ -206,7 +206,7 @@ decl_module! {
 			ensure!(!NftOrder::<T>::contains_key(&nft_id), Error::<T>::NftOrderExist);
 
 			// 检查最小价格
-			ensure!(T::MinimumPrice::get() >= start_price, Error::<T>::StartPriceTooLow);
+			ensure!(T::MinimumPrice::get() <= start_price, Error::<T>::StartPriceTooLow);
 
 			// 检查价格是否合法
 			ensure!(start_price <= end_price, Error::<T>::OrderPriceIllegal);
@@ -246,7 +246,7 @@ decl_module! {
 			ensure!(!Self::is_time_to_settlement(&order)?, Error::<T>::IsTimeToSettlement);
 
 			// 检查最小价格
-			ensure!(T::MinimumPrice::get() >= price, Error::<T>::PriceTooLow);
+			ensure!(T::MinimumPrice::get() <= price, Error::<T>::PriceTooLow);
 
 			// 检查价格是否合法
 			ensure!(order.start_price <= price, Error::<T>::OrderPriceTooSmall);
@@ -320,7 +320,7 @@ decl_module! {
 			ensure!(!Self::is_time_to_settlement(&order)?, Error::<T>::IsTimeToSettlement);
 
 			// 检查最小质押
-			ensure!(T::MinimumVotingLock::get() >= amount, Error::<T>::VoteAmountTooLow);
+			ensure!(T::MinimumVotingLock::get() <= amount, Error::<T>::VoteAmountTooLow);
 
 			let now = frame_system::Module::<T>::block_number();
 			let keep_block_num = order.create_block
@@ -381,9 +381,6 @@ impl<T: Trait> Module<T> {
 		NftOrder::<T>::remove(order.nft_id);
 		let votes: Vec<VoteOf<T>> = Votes::<T>::get(order.order_id);
 		Self::algorithm(&order, price, votes.clone());
-		for vote in votes {
-			T::Currency::unreserve(&vote.owner, vote.amount);
-		}
 		Votes::<T>::remove(order.order_id);
 		// 更新nft账户索引
 		NftAccount::<T>::insert(order.nft_id, bid.clone());
@@ -421,6 +418,7 @@ impl<T: Trait> Module<T> {
 		let mut total: U64F64 = U64F64::from_num(0.0); // 总质押数量
 		let mut weight_rate: U64F64 = U64F64::from_num(0.0); // 汇率
 		let mut tt: U64F64 = U64F64::from_num(0.0);
+		let mut vote_res: Vec<(VoteOf<T>, U64F64)> = vec![];
 		for vote in inputs {
 			let amount: u128 = vote.amount.saturated_into();
 			let amount: U64F64 = U64F64::from_num(amount);
@@ -440,6 +438,7 @@ impl<T: Trait> Module<T> {
 			if year_rate < fix_rate {
 				is_fixed = true;
 			}
+			vote_res.push((vote, t));
 
 			debug::warn!(
 				"质押数量: {}, 质押时长: {}day, 当前汇率: {}, 当前年收益率为: {}, 此次获得的凭证为: {}/{}",
@@ -450,6 +449,16 @@ impl<T: Trait> Module<T> {
 				t,
 				tt
 			)
+		}
+		let profit_amount: U64F64 = profit_rate * bid_price;
+		for (vote, t) in vote_res {
+			T::Currency::unreserve(&vote.owner, vote.amount);
+			let profit_amount: U64F64 = profit_amount / tt * t;
+			let profit_amount: u128 = profit_amount.floor().to_num();
+			let profit_amount: BalanceOf<T> = profit_amount.saturated_into();
+			let _ = T::Currency::transfer(&order.owner, &vote.owner, profit_amount,
+								  ExistenceRequirement::KeepAlive
+			);
 		}
 	}
 
