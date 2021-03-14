@@ -31,8 +31,13 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 
 	pub const ExistentialDeposit: u64 = 1;
-	pub const MinKeepBlockNumber: u64 = 100;
-	pub const MaxKeepBlockNumber: u64 = 600;
+	pub const MinKeepBlockNumber: u64 = 1;
+	pub const MaxKeepBlockNumber: u64 = 60 * 60 / 6 * 24 * 365;
+	pub const MinimumPrice: u64 = 1;
+	pub const MinimumVotingLock: u64 = 1;
+	pub const FixRate: f64 = 0.2;
+	pub const ProfitRate: f64 = 0.2;
+	pub const DayBlockNum: u64 = 60 * 60 / 6 * 24;
 }
 impl system::Trait for Test {
 	type BaseCallFilter = ();
@@ -76,6 +81,11 @@ impl Trait for Test {
 	type Event = TestEvent;
 	type MinKeepBlockNumber = MinKeepBlockNumber;
 	type MaxKeepBlockNumber = MaxKeepBlockNumber;
+	type MinimumPrice = MinimumPrice;
+	type MinimumVotingLock = MinimumVotingLock;
+	type FixRate = ();
+	type ProfitRate = ();
+	type DayBlockNum = ();
 	type NftId = u32;
 	type OrderId = u32;
 	type Currency = Balances;

@@ -263,12 +263,14 @@ impl pallet_sudo::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
 }
-
 parameter_types! {
 	pub const MinKeepBlockNumber: BlockNumber = 1 * HOURS;
 	pub const MaxKeepBlockNumber: BlockNumber = 2 * DAYS;
 	pub const MinimumPrice: Balance = 1 * DOLLARS;
 	pub const MinimumVotingLock: Balance = 1 * CENTS;
+	pub const FixRate: f64 = 0.2;
+	pub const ProfitRate: f64 = 0.2;
+	pub const DayBlockNum: BlockNumber = DAYS;
 }
 impl pallet_nft::Trait for Runtime {
 	type Event = Event;
@@ -276,6 +278,9 @@ impl pallet_nft::Trait for Runtime {
 	type MaxKeepBlockNumber = MaxKeepBlockNumber;
 	type MinimumPrice = MinimumPrice;
 	type MinimumVotingLock = MinimumVotingLock;
+	type FixRate = FixRate;
+	type ProfitRate = ProfitRate;
+	type DayBlockNum = DayBlockNum;
 	type NftId = u128;
 	type OrderId = u128;
 	type Currency = Balances;

@@ -25,6 +25,7 @@
   "VoteOf": {
     "order_id": "u128",
     "amount": "Balance",
+    "keep_block_num": "u32",
     "owner": "Hash"
   }
 }
