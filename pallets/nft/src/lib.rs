@@ -413,6 +413,9 @@ impl<T: Trait> Module<T> {
 		bid_price: BalanceOf<T>, // 购买价格
 		inputs: Vec<VoteOf<T>> //质押列表
 	) {
+		if inputs.is_empty() {
+			return
+		}
 		let fix_rate: U64F64 = U64F64::from_num(T::FixRate::get());
 		let profit_rate: U64F64 = U64F64::from_num(T::ProfitRate::get());
 		let day_block_num: u128 = T::DayBlockNum::get().saturated_into();

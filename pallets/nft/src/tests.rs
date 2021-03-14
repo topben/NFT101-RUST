@@ -6,10 +6,10 @@ use frame_support::{assert_ok, assert_noop};
 fn test_ntf_create() {
 	new_test_ext().execute_with(|| {
 		run_to_block(10);
-		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
+		assert_ok!(NftModule::create(Origin::signed(1), "title_value".into(), "url_value".into(), "desc_value".into()));
 		let lock_event = TestEvent::nft_event(RawEvent::NftCreated(1, 0));
 		assert!(System::events().iter().any(|a| a.event == lock_event));
-		assert_ne!(Nfts::<Test>::get(&0), Vec::<u8>::new());
+		assert!(Nfts::<Test>::get(&0).is_some());
 		assert_eq!(NftAccount::<Test>::get(&0), 1);
 	});
 }
@@ -18,12 +18,12 @@ fn test_ntf_create() {
 fn test_ntf_remove_success() {
 	new_test_ext().execute_with(|| {
 		run_to_block(10);
-		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
+		assert_ok!(NftModule::create(Origin::signed(1), "title_value".into(), "url_value".into(), "desc_value".into()));
 		assert_ok!(NftModule::remove(Origin::signed(1), 0));
 
 		let lock_event = TestEvent::nft_event(RawEvent::NftRemove(1, 0));
 		assert!(System::events().iter().any(|a| a.event == lock_event));
-		assert_eq!(Nfts::<Test>::get(&0), Vec::<u8>::new());
+		assert!(Nfts::<Test>::get(&0).is_none());
 		assert_ne!(NftAccount::<Test>::get(&0), 1);
 	});
 }
@@ -40,7 +40,7 @@ fn test_ntf_remove_not_exist() {
 fn test_ntf_remove_not_owner() {
 	new_test_ext().execute_with(|| {
 		run_to_block(10);
-		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
+		assert_ok!(NftModule::create(Origin::signed(1), "title_value".into(), "url_value".into(), "desc_value".into()));
 		assert_noop!(NftModule::remove(Origin::signed(2), 0), Error::<Test>::NotNftOwner);
 	});
 }
@@ -49,7 +49,7 @@ fn test_ntf_remove_not_owner() {
 fn test_nft_remove_order_exist() {
 	new_test_ext().execute_with(|| {
 		run_to_block(10);
-		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
+		assert_ok!(NftModule::create(Origin::signed(1), "title_value".into(), "url_value".into(), "desc_value".into()));
 		assert_ok!(NftModule::order_sell(Origin::signed(1), 0, 100, 200, 200));
 		assert_noop!(NftModule::remove(Origin::signed(1), 0), Error::<Test>::NftOrderExist);
 	});
@@ -59,12 +59,12 @@ fn test_nft_remove_order_exist() {
 fn test_ntf_transfer_success() {
 	new_test_ext().execute_with(|| {
 		run_to_block(10);
-		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
+		assert_ok!(NftModule::create(Origin::signed(1), "title_value".into(), "url_value".into(), "desc_value".into()));
 		assert_ok!(NftModule::transfer(Origin::signed(1), 2, 0));
 
 		let lock_event = TestEvent::nft_event(RawEvent::NftTransfer(1, 2,0));
 		assert!(System::events().iter().any(|a| a.event == lock_event));
-		assert_ne!(Nfts::<Test>::get(&0), Vec::<u8>::new());
+		assert!(Nfts::<Test>::get(&0).is_some());
 		assert_eq!(NftAccount::<Test>::get(&0), 2);
 	});
 }
@@ -81,7 +81,7 @@ fn test_ntf_transfer_not_exist() {
 fn test_ntf_transfer_not_owner() {
 	new_test_ext().execute_with(|| {
 		run_to_block(10);
-		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
+		assert_ok!(NftModule::create(Origin::signed(1), "title_value".into(), "url_value".into(), "desc_value".into()));
 		assert_noop!(NftModule::transfer(Origin::signed(2), 3, 0), Error::<Test>::NotNftOwner);
 	});
 }
@@ -90,7 +90,7 @@ fn test_ntf_transfer_not_owner() {
 fn test_nft_transfer_order_exist() {
 	new_test_ext().execute_with(|| {
 		run_to_block(10);
-		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
+		assert_ok!(NftModule::create(Origin::signed(1), "title_value".into(), "url_value".into(), "desc_value".into()));
 		assert_ok!(NftModule::order_sell(Origin::signed(1), 0, 100, 200, 200));
 		assert_noop!(NftModule::transfer(Origin::signed(1), 2, 0), Error::<Test>::NftOrderExist);
 	});
@@ -100,7 +100,7 @@ fn test_nft_transfer_order_exist() {
 fn test_order_sell_success() {
 	new_test_ext().execute_with(|| {
 		run_to_block(10);
-		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
+		assert_ok!(NftModule::create(Origin::signed(1), "title_value".into(), "url_value".into(), "desc_value".into()));
 		assert_ok!(NftModule::order_sell(Origin::signed(1), 0, 100, 200, 200));
 		let order_opt: Option<OrderOf<Test>> = Orders::<Test>::get(&0);
 		assert!(order_opt.is_some());
@@ -119,8 +119,8 @@ fn test_order_sell_success() {
 fn test_order_buy_success() {
 	new_test_ext().execute_with(|| {
 		run_to_block(10);
-		assert_ok!(NftModule::create(Origin::signed(1), "hello".into()));
-		assert_ok!(NftModule::order_sell(Origin::signed(1), 0, 100, 200, 200));
+		assert_ok!(NftModule::create(Origin::signed(1), "title_value".into(), "url_value".into(), "desc_value".into()));
+		assert_ok!(NftModule::order_sell(Origin::signed(1), 0, 100, 200, 10000));
 		assert_ok!(NftModule::order_buy(Origin::signed(2), 0, 200));
 		assert!(Orders::<Test>::get(&0).is_none());
 		assert!(NftOrder::<Test>::get(&0).is_none());

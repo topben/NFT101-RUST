@@ -5,7 +5,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 };
 use frame_system as system;
-use frame_support::traits::Get;
 
 impl_outer_origin! {
 	pub enum Origin for Test {}
@@ -32,13 +31,13 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 
 	pub const ExistentialDeposit: u64 = 1;
-	pub const MinKeepBlockNumber: u64 = 100;
-	pub const MaxKeepBlockNumber: u64 = 600;
-	pub const MinimumPrice: u64 = 0;
-	pub const MinimumVotingLock: u64 = 0;
+	pub const MinKeepBlockNumber: u64 = 1;
+	pub const MaxKeepBlockNumber: u64 = 60 * 60 / 6 * 24 * 365;
+	pub const MinimumPrice: u64 = 1;
+	pub const MinimumVotingLock: u64 = 1;
 	pub const FixRate: f64 = 0.2;
 	pub const ProfitRate: f64 = 0.2;
-	pub const DayBlockNum: u64 = 600;
+	pub const DayBlockNum: u64 = 60 * 60 / 6 * 24;
 }
 impl system::Trait for Test {
 	type BaseCallFilter = ();
