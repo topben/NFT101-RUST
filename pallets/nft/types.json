@@ -1,7 +1,11 @@
 {
   "Address": "MultiAddress",
   "LookupSource": "MultiAddress",
-  "Nft": "String",
+  "Nft": {
+    "title": "String",
+    "url": "String",
+    "desc": "String"
+  },
   "NftId": "u128",
   "OrderId": "u128",
   "OrderOf": {
@@ -9,6 +13,7 @@
     "start_price": "Balance",
     "end_price": "Balance",
     "nft_id": "u128",
+    "create_block": "u32",
     "keep_block_num": "u32",
     "owner": "Hash"
   },
