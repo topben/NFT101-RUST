@@ -1,7 +1,11 @@
 {
   "Address": "MultiAddress",
   "LookupSource": "MultiAddress",
-  "Nft": "String",
+  "Nft": {
+    "title": "String",
+    "url": "String",
+    "desc": "String"
+  },
   "NftId": "u128",
   "OrderId": "u128",
   "OrderOf": {
