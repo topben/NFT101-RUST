@@ -44,6 +44,13 @@ pub struct Order<OrderId, NftId, AccountId, Balance, BlockNumber> {
 	pub owner: AccountId,
 }
 
+#[derive(Encode, Decode, Clone, RuntimeDebug)]
+pub struct Nft {
+	pub title: Vec<u8>,
+	pub url: Vec<u8>,
+	pub desc: Vec<u8>,
+}
+
 #[derive(Encode, Decode, Clone, RuntimeDebug, Eq, PartialEq)]
 pub struct Bid<OrderId, AccountId, Balance> {
 	pub order_id: OrderId,
@@ -61,7 +68,6 @@ pub struct Vote<OrderId, AccountId, Balance, BlockNumber> {
 	pub owner: AccountId,
 }
 
-type Nft = Vec<u8>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type OrderOf<T> = Order<<T as Trait>::OrderId, <T as Trait>::NftId, <T as frame_system::Trait>::AccountId, BalanceOf<T>, <T as frame_system::Trait>::BlockNumber>;
 type BidOf<T> = Bid<<T as Trait>::OrderId, <T as frame_system::Trait>::AccountId, BalanceOf<T>>;
@@ -69,15 +75,24 @@ type VoteOf<T> = Vote<<T as Trait>::OrderId, <T as frame_system::Trait>::Account
 
 decl_storage! {
 	trait Store for Module<T: Trait> as NftModule {
-		pub Nfts: map hasher(twox_64_concat) T::NftId => Nft;
+		// nftId -> nft详情， 用于存储所有nft
+		pub Nfts: map hasher(twox_64_concat) T::NftId => Option<Nft>;
+		// nftId -> 账户Id， 用于记录nft所有者
 		pub NftAccount: map hasher(twox_64_concat) T::NftId => T::AccountId;
-		pub NextNftId: T::NftId;
 
-		pub NextOrderId: T::OrderId;
-		pub Orders: map hasher(twox_64_concat) T::OrderId => Option<OrderOf<T>>;
-		pub Bids: map hasher(twox_64_concat) T::OrderId => Option<BidOf<T>>;
+		// nftId -> 订单Id， 用于记录Nft对应的订单数据
 		pub NftOrder: map hasher(twox_64_concat) T::NftId => Option<T::OrderId>;
-		pub Votes: map hasher(twox_64_concat) T::OrderId => Vec<VoteOf<T>>; // 存储结构可以优化
+		// 订单Id -> 订单详情, 用于存储所有待完成的拍卖订单
+		pub Orders: map hasher(twox_64_concat) T::OrderId => Option<OrderOf<T>>;
+		// 订单Id -> 当前最大出价，用于存储当前订单的最大出价
+		pub Bids: map hasher(twox_64_concat) T::OrderId => Option<BidOf<T>>;
+		// 订单Id -> 质押投票列表, 用于存储质押列表
+		pub Votes: map hasher(twox_64_concat) T::OrderId => Vec<VoteOf<T>>;
+
+		// NftId生成器，递增
+		pub NextNftId: T::NftId;
+		// 拍卖订单Id生成器，递增
+		pub NextOrderId: T::OrderId;
 	}
 }
 
@@ -135,13 +150,18 @@ decl_module! {
 		const MinimumVotingLock: BalanceOf<T> = T::MinimumVotingLock::get();
 
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn create(origin, url: Vec<u8>) -> dispatch::DispatchResult {
+		pub fn create(origin, title: Vec<u8>, url: Vec<u8>, desc: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
+			let nft = Nft {
+				title,
+				url,
+				desc
+			};
 			NextNftId::<T>::try_mutate(|id| -> DispatchResult {
 				let nft_id = *id;
 				*id = id.checked_add(&One::one()).ok_or(Error::<T>::NftIdOverflow)?;
 				// 创建nft并建立 nft索引、账户索引
-				Nfts::<T>::insert(nft_id, &url);
+				Nfts::<T>::insert(nft_id, &nft);
 				NftAccount::<T>::insert(nft_id, who.clone());
 				Self::deposit_event(RawEvent::NftCreated(who, nft_id));
 				Ok(())
