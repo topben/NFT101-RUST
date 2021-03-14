@@ -20,11 +20,17 @@ mod tests;
 
 pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	// 拍卖订单最小保留区块数
 	type MinKeepBlockNumber: Get<Self::BlockNumber>;
+	// 拍卖订单最大保留区块数
 	type MaxKeepBlockNumber: Get<Self::BlockNumber>;
+	// 最小拍卖价格
 	type MinimumPrice: Get<BalanceOf<Self>>;
+	// 最小质押投票数量
 	type MinimumVotingLock: Get<BalanceOf<Self>>;
+	// 用于分润算法的固定利润常数
 	type FixRate: Get<f64>;
+	// 参与质押的分润比例
 	type ProfitRate: Get<f64>;
 	type DayBlockNum: Get<Self::BlockNumber>;
 	type NftId: Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + Bounded;
@@ -149,6 +155,7 @@ decl_module! {
 		const MinimumPrice: BalanceOf<T> = T::MinimumPrice::get();
 		const MinimumVotingLock: BalanceOf<T> = T::MinimumVotingLock::get();
 
+		// 创建Nft艺术品
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn create(origin, title: Vec<u8>, url: Vec<u8>, desc: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -169,6 +176,7 @@ decl_module! {
 			Ok(())
 		}
 
+		// 移除Nft
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn remove(origin, nft_id: T::NftId) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -189,6 +197,7 @@ decl_module! {
 			Ok(())
 		}
 
+		// 转移Nft艺术品
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn transfer(origin, target: T::AccountId, nft_id: T::NftId) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -208,6 +217,7 @@ decl_module! {
 			Ok(())
 		}
 
+		// 下拍卖单出售艺术品
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn order_sell(origin, nft_id: T::NftId, start_price: BalanceOf<T>, end_price: BalanceOf<T>, keep_block_num: T::BlockNumber) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -255,6 +265,7 @@ decl_module! {
 			Ok(())
 		}
 
+		// 竞拍Nft艺术品
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn order_buy(origin, order_id: T::OrderId, price: BalanceOf<T>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -301,6 +312,7 @@ decl_module! {
 			Ok(())
 		}
 
+		// 主动结算拍卖 // 用于到期结算
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn order_settlement(origin, order_id: T::OrderId) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -330,6 +342,7 @@ decl_module! {
 			Ok(())
 		}
 
+		// 进行投票质押
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn vote_order(origin, order_id: T::OrderId, amount: BalanceOf<T>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -386,7 +399,6 @@ impl<T: Trait> Module<T> {
 	}
 
 
-	// todo: 进行订单结算
 	fn order_complete(
 		order: &OrderOf<T>,
 		bid: &T::AccountId, // 购买者
