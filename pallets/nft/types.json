@@ -13,18 +13,19 @@
     "start_price": "Balance",
     "end_price": "Balance",
     "nft_id": "u128",
-    "keep_block_num": "u32",
-    "owner": "Hash"
+    "create_block": "BlockNumber",
+    "keep_block_num": "BlockNumber",
+    "owner": "AccountId"
   },
   "BidOf": {
     "order_id": "u128",
     "price": "Balance",
-    "owner": "Hash"
+    "owner": "AccountId"
   },
   "VoteOf": {
     "order_id": "u128",
     "amount": "Balance",
-    "keep_block_num": "u32",
-    "owner": "Hash"
+    "keep_block_num": "BlockNumber",
+    "owner": "AccountId"
   }
 }
