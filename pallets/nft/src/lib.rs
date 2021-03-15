@@ -41,7 +41,7 @@ pub trait Trait: frame_system::Trait {
 #[derive(Encode, Decode, Clone, RuntimeDebug, Eq, PartialEq)]
 pub struct Order<OrderId, NftId, AccountId, Balance, BlockNumber> {
 	pub order_id: OrderId,
-	#[codec(compact)]
+	// #[codec(compact)]
 	pub start_price: Balance,
 	pub end_price: Balance,
 	pub nft_id: NftId,
@@ -60,7 +60,7 @@ pub struct Nft {
 #[derive(Encode, Decode, Clone, RuntimeDebug, Eq, PartialEq)]
 pub struct Bid<OrderId, AccountId, Balance> {
 	pub order_id: OrderId,
-	#[codec(compact)]
+	// #[codec(compact)]
 	pub price: Balance,
 	pub owner: AccountId,
 }
@@ -68,7 +68,7 @@ pub struct Bid<OrderId, AccountId, Balance> {
 #[derive(Encode, Decode, Clone, RuntimeDebug, Eq, PartialEq)]
 pub struct Vote<OrderId, AccountId, Balance, BlockNumber> {
 	pub order_id: OrderId,
-	#[codec(compact)]
+	// #[codec(compact)]
 	pub amount: Balance,
 	pub keep_block_num: BlockNumber,
 	pub owner: AccountId,
@@ -106,16 +106,16 @@ decl_event!(
 	pub enum Event<T> where
 		<T as Trait>::NftId,
 		<T as Trait>::OrderId,
-		Order = OrderOf<T>,
-		Bid = BidOf<T>,
+		// Order = OrderOf<T>,
+		// Bid = BidOf<T>,
 		AccountId = <T as frame_system::Trait>::AccountId,
 	{
 		NftCreated(AccountId, NftId),
 		NftRemove(AccountId, NftId),
 		NftTransfer(AccountId, AccountId, NftId),
 
-		OrderSell(AccountId, Order),
-		OrderBuy(AccountId, Bid),
+		OrderSell(AccountId, OrderId),
+		OrderBuy(AccountId, OrderId),
 
 		OrderComplete(AccountId, OrderId),
 		OrderCancel(AccountId, OrderId),
@@ -259,7 +259,7 @@ decl_module! {
 				NftOrder::<T>::insert(nft_id, order_id);
 				let votes: Vec<VoteOf<T>> = Vec::new();
 				Votes::<T>::insert(order_id, votes);
-				Self::deposit_event(RawEvent::OrderSell(who, order));
+				Self::deposit_event(RawEvent::OrderSell(who, order_id));
 				Ok(())
 			})?;
 			Ok(())
@@ -307,7 +307,7 @@ decl_module! {
 					owner: who.clone()
 				};
 				Bids::<T>::insert(order_id, bid.clone());
-				Self::deposit_event(RawEvent::OrderBuy(who, bid));
+				Self::deposit_event(RawEvent::OrderBuy(who, order_id));
 			}
 			Ok(())
 		}
